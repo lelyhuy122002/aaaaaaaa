@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="vi" data-lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Design Studio — Blankup</title>
+  <meta name="description" content="Tạo thiết kế áo thun độc nhất với AI. Viết prompt hoặc upload ảnh để AI thiết kế cho bạn.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/studio.css?v=gltf-viewer-1">
+</head>
+<body>
+
+  <!-- ====== NAVIGATION ====== -->
+  <nav class="navbar scrolled" id="navbar">
+    <div class="container">
+      <a href="/" class="navbar-logo">
+        <svg class="logo-icon" viewBox="0 0 38 38" fill="none">
+          <rect width="38" height="38" rx="10" fill="#ff6b00"/>
+          <path d="M10 14 L14 10 L24 10 L28 14 L26 14 L26 28 L12 28 L12 14 Z" fill="white" opacity="0.9"/>
+          <path d="M16 10 L19 6 L22 10" stroke="white" stroke-width="1.5" fill="none"/>
+          <path d="M22 18 L28 12" stroke="white" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="29" cy="11" r="2" fill="white"/>
+        </svg>
+        <span>BLANK<span class="logo-highlight">UP</span></span>
+      </a>
+
+      <div class="navbar-actions">
+        <div class="lang-toggle" id="langToggle">
+          <span class="lang-vi active" data-lang="vi">VI</span>
+          <span class="lang-en" data-lang="en">EN</span>
+        </div>
+        <a href="/" class="btn btn-ghost btn-sm">← <span data-i18n="nav.home">Trang chủ</span></a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="studio-page">
+    <div class="container">
+      <!-- Studio Header -->
+      <div class="studio-header">
+        <h1 data-i18n="studio.title">🎨 AI Design Studio</h1>
+        <p data-i18n="studio.subtitle">Tạo thiết kế áo thun độc nhất với AI</p>
+      </div>
+
+      <!-- Main Studio Grid -->
+      <div class="studio-grid">
+
+        <!-- ===== LEFT: Control Panel ===== -->
+        <div class="studio-controls">
+          <!-- Tabs -->
+          <div class="studio-tabs">
+            <button class="studio-tab active" data-tab="prompt" id="tabPrompt">
+              <span class="studio-tab-icon">✍️</span>
+              <span data-i18n="studio.tab.prompt">Viết Prompt</span>
+            </button>
+            <button class="studio-tab" data-tab="image" id="tabImage">
+              <span class="studio-tab-icon">📸</span>
+              <span data-i18n="studio.tab.image">Ảnh + Ý tưởng</span>
+            </button>
+          </div>
+
+          <!-- Tab 1: Text Prompt -->
+          <div class="tab-content active" id="tabContentPrompt">
+            <div class="form-group">
+              <label class="control-label" data-i18n="studio.prompt.label">Mô tả thiết kế của bạn</label>
+              <textarea class="prompt-textarea" id="promptInput" 
+                data-i18n-placeholder="studio.prompt.placeholder"
+                placeholder='VD: "Một con rồng Việt Nam phong cách cyberpunk với hiệu ứng neon xanh, trên nền đen"'></textarea>
+            </div>
+
+            <div class="form-group">
+              <label class="control-label" data-i18n="studio.style.label">Phong cách</label>
+              <div class="style-grid" id="styleGrid">
+                <button class="style-option active" data-style="minimalist" data-i18n="style.minimalist">Tối giản</button>
+                <button class="style-option" data-style="streetwear" data-i18n="style.streetwear">Streetwear</button>
+                <button class="style-option" data-style="vintage" data-i18n="style.vintage">Vintage</button>
+                <button class="style-option" data-style="abstract" data-i18n="style.abstract">Trừu tượng</button>
+                <button class="style-option" data-style="anime" data-i18n="style.anime">Anime</button>
+                <button class="style-option" data-style="watercolor" data-i18n="style.watercolor">Màu nước</button>
+                <button class="style-option" data-style="geometric" data-i18n="style.geometric">Hình học</button>
+                <button class="style-option" data-style="typography" data-i18n="style.typography">Typography</button>
+              </div>
+            </div>
+
+            <button class="generate-btn" id="generatePromptBtn">
+              <span class="spinner"></span>
+              <span class="btn-text" data-i18n="studio.generate">🎨 Tạo Design</span>
+              <span class="btn-loading-text" data-i18n="studio.generating">AI đang sáng tạo...</span>
+            </button>
+          </div>
+
+          <!-- Tab 2: Image + Idea -->
+          <div class="tab-content" id="tabContentImage">
+            <div class="form-group">
+              <label class="control-label">Upload ảnh tham khảo</label>
+              <div class="upload-dropzone" id="uploadDropzone">
+                <input type="file" id="imageUpload" accept="image/*" hidden>
+                <span class="upload-icon">🖼️</span>
+                <div class="upload-text" data-i18n="studio.upload.text">Kéo thả ảnh vào đây</div>
+                <div class="upload-or" data-i18n="studio.upload.or">hoặc</div>
+                <span class="upload-browse" data-i18n="studio.upload.browse">Chọn file</span>
+                <div class="upload-formats" data-i18n="studio.upload.formats">PNG, JPG, WEBP (tối đa 5MB)</div>
+              </div>
+              <div class="upload-preview" id="uploadPreview">
+                <img id="uploadPreviewImg" src="" alt="Preview">
+                <button class="remove-upload" id="removeUpload" title="Remove">✕</button>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="control-label" data-i18n="studio.idea.label">Mô tả ý tưởng</label>
+              <textarea class="prompt-textarea" id="ideaInput" 
+                data-i18n-placeholder="studio.idea.placeholder"
+                placeholder="Mô tả ý tưởng chỉnh sửa dựa trên ảnh này..." style="min-height:90px;"></textarea>
+            </div>
+
+            <button class="generate-btn" id="generateImageBtn">
+              <span class="spinner"></span>
+              <span class="btn-text" data-i18n="studio.generate">🎨 Tạo Design</span>
+              <span class="btn-loading-text" data-i18n="studio.generating">AI đang sáng tạo...</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- ===== RIGHT: Preview Panel ===== -->
+        <div class="studio-preview">
+          <div class="preview-header">
+            <span class="preview-title" data-i18n="studio.preview.title">👕 Xem trước</span>
+            <div class="preview-view-toggle">
+              <button class="view-toggle-btn active" data-view="front" data-i18n="studio.front">Trước</button>
+              <button class="view-toggle-btn" data-view="back" data-i18n="studio.back">Sau</button>
+            </div>
+          </div>
+
+          <div class="preview-mockup-area">
+            <!-- Empty state -->
+            <div class="preview-empty" id="previewEmpty">
+              <div class="preview-empty-icon">👕</div>
+              <div class="preview-empty-text" data-i18n="studio.preview.empty">Tạo một design để xem trước tại đây</div>
+            </div>
+
+            <!-- Mockup with design -->
+            <div class="mockup-container" id="mockupContainer" style="display:none;">
+              <canvas class="tshirt-360-canvas" id="tshirt360Canvas" aria-label="3D t-shirt viewer"></canvas>
+              <img class="product-render-3d" id="productRender3d" src="" alt="3D product preview">
+              <canvas class="mockup-3d-canvas" id="mockup3dCanvas" aria-label="3D t-shirt preview"></canvas>
+              <img class="mockup-tshirt" id="mockupTshirt" 
+                src="data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 360'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0%25' stop-color='%23f8f8f8'/%3E%3Cstop offset='100%25' stop-color='%23e8e8e8'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M75 50 L30 80 L10 140 L55 150 L65 100 L65 330 L235 330 L235 100 L245 150 L290 140 L270 80 L225 50 L195 65 Q175 80 150 80 Q125 80 105 65 Z' fill='url(%23g)' stroke='%23ddd' stroke-width='1'/%3E%3Cellipse cx='150' cy='52' rx='30' ry='15' fill='none' stroke='%23ddd' stroke-width='1'/%3E%3C/svg%3E" 
+                alt="T-shirt mockup">
+              <div class="mockup-design-overlay" id="mockupDesign"></div>
+            </div>
+          </div>
+
+          <div class="preview-controls">
+            <div class="preview-options">
+              <div class="preview-option product-preview-option">
+                <label>Product</label>
+                <div class="product-type-options" id="productTypeOptions">
+                  <button class="product-type-option active" data-product-type="tshirt">T-shirt</button>
+                  <button class="product-type-option" data-product-type="hoodie">Hoodie</button>
+                  <button class="product-type-option" data-product-type="polo">Polo</button>
+                </div>
+              </div>
+              <div class="preview-option">
+                <label data-i18n="studio.color.label">Màu áo</label>
+                <div class="color-options" id="colorOptions">
+                  <button class="color-option active" data-color="#ffffff" style="background:#ffffff;" title="White"></button>
+                  <button class="color-option" data-color="#000000" style="background:#000000;" title="Black"></button>
+                  <button class="color-option" data-color="#1e293b" style="background:#1e293b;" title="Navy"></button>
+                  <button class="color-option" data-color="#6b7280" style="background:#6b7280;" title="Gray"></button>
+                  <button class="color-option" data-color="#dc2626" style="background:#dc2626;" title="Red"></button>
+                  <button class="color-option" data-color="#2563eb" style="background:#2563eb;" title="Blue"></button>
+                  <button class="color-option" data-color="#059669" style="background:#059669;" title="Green"></button>
+                </div>
+              </div>
+
+              <div class="preview-option">
+                <label data-i18n="studio.size.label">Kích cỡ</label>
+                <div class="size-options" id="sizeOptions">
+                  <button class="size-option" data-size="S">S</button>
+                  <button class="size-option active" data-size="M">M</button>
+                  <button class="size-option" data-size="L">L</button>
+                  <button class="size-option" data-size="XL">XL</button>
+                  <button class="size-option" data-size="2XL">2XL</button>
+                </div>
+              </div>
+
+              <div class="preview-option">
+                <label data-i18n="studio.quantity.label">Số lượng</label>
+                <div class="quantity-control">
+                  <button class="qty-btn" id="qtyMinus">−</button>
+                  <input type="number" class="qty-value" id="qtyValue" value="1" min="1" max="100" readonly>
+                  <button class="qty-btn" id="qtyPlus">+</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="preview-actions">
+              <button class="btn btn-primary" id="orderBtn" data-i18n="studio.order" disabled>
+                💵 Đặt hàng (COD)
+              </button>
+              <button class="btn btn-secondary" id="downloadBtn" data-i18n="studio.download" disabled>
+                ⬇️ Tải design
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== Community Gallery ===== -->
+      <div class="community-section">
+        <div class="community-header">
+          <h2 data-i18n="studio.recent.title">🌟 Thiết kế cộng đồng</h2>
+          <p data-i18n="studio.recent.subtitle">Lấy cảm hứng từ các thiết kế của cộng đồng Blankup</p>
+        </div>
+        <div class="community-grid" id="communityGrid">
+          <!-- Loaded dynamically -->
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ====== ORDER MODAL ====== -->
+  <div class="modal-overlay" id="orderModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title" data-i18n="order.title">📦 Xác nhận đơn hàng</h3>
+        <button class="modal-close" id="modalClose">✕</button>
+      </div>
+      <div class="modal-body">
+        <!-- Order Form -->
+        <div id="orderFormContent">
+          <div class="order-summary" id="orderSummary">
+            <div class="order-summary-row">
+              <span class="label" data-i18n="order.product">Sản phẩm</span>
+              <span class="value" id="orderProduct">T-Shirt Custom</span>
+            </div>
+            <div class="order-summary-row">
+              <span class="label" data-i18n="order.color">Màu</span>
+              <span class="value" id="orderColor">Trắng</span>
+            </div>
+            <div class="order-summary-row">
+              <span class="label" data-i18n="order.size">Kích cỡ</span>
+              <span class="value" id="orderSize">M</span>
+            </div>
+            <div class="order-summary-row">
+              <span class="label" data-i18n="order.qty">Số lượng</span>
+              <span class="value" id="orderQty">1</span>
+            </div>
+            <div class="order-summary-row total">
+              <span class="label" data-i18n="order.total">Tổng tiền</span>
+              <span class="value" id="orderTotal">200,000đ</span>
+            </div>
+          </div>
+
+          <div class="cod-badge">
+            <span class="cod-icon">💵</span>
+            <span class="cod-text" data-i18n="order.payment">Thanh toán khi nhận hàng (COD)</span>
+          </div>
+
+          <div class="order-divider" data-i18n="order.info">Thông tin giao hàng</div>
+
+          <form id="orderForm">
+            <div class="form-group">
+              <label data-i18n="order.name">Họ tên *</label>
+              <input type="text" class="form-input" id="orderName" required>
+            </div>
+            <div class="form-group">
+              <label data-i18n="order.phone">Số điện thoại *</label>
+              <input type="tel" class="form-input" id="orderPhone" required>
+            </div>
+            <div class="form-group">
+              <label data-i18n="order.address">Địa chỉ giao hàng *</label>
+              <textarea class="form-input" id="orderAddress" rows="2" required></textarea>
+            </div>
+            <div class="form-group">
+              <label data-i18n="order.note">Ghi chú (tùy chọn)</label>
+              <input type="text" class="form-input" id="orderNote">
+            </div>
+            <button type="submit" class="btn btn-primary btn-lg" style="width:100%;" id="orderSubmitBtn">
+              <span data-i18n="order.submit">✅ Xác nhận đặt hàng</span>
+            </button>
+          </form>
+        </div>
+
+        <!-- Order Success -->
+        <div class="order-success-content" id="orderSuccess">
+          <div class="order-success-icon">🎉</div>
+          <h3 class="order-success-title" data-i18n="order.success.title">Đặt hàng thành công!</h3>
+          <p class="order-success-id" id="orderSuccessId"></p>
+          <p class="order-success-note" data-i18n="order.success.note">Chúng tôi sẽ liên hệ xác nhận trong vòng 24 giờ.</p>
+          <button class="btn btn-primary" id="orderCloseBtn" data-i18n="order.close">Đóng</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="js/i18n.js"></script>
+  <script src="js/auth.js"></script>
+  <script type="importmap">
+    {"imports":{"three":"/vendor/three/three.module.js","three/addons/":"/vendor/three/examples/jsm/"}}
+  </script>
+  <script type="module" src="js/tshirt-360.js?v=13"></script>
+  <script src="js/studio.js?v=uniform-price-1"></script>
+</body>
+</html>
