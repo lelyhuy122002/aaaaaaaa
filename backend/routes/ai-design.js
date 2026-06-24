@@ -31,8 +31,8 @@ loadEnvFile(path.join(__dirname, '../../.env'));
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-2';
 const OPENAI_IMAGE_SIZE = process.env.OPENAI_IMAGE_SIZE || '1024x1024';
-const OPENAI_IMAGE_QUALITY = process.env.OPENAI_IMAGE_QUALITY || 'high';
-const OPENAI_IMAGE_BACKGROUND = process.env.OPENAI_IMAGE_BACKGROUND || 'transparent';
+const OPENAI_IMAGE_QUALITY = process.env.OPENAI_IMAGE_QUALITY || 'auto';
+const OPENAI_IMAGE_BACKGROUND = process.env.OPENAI_IMAGE_BACKGROUND || 'auto';
 const OPENAI_IMAGE_OUTPUT_FORMAT = process.env.OPENAI_IMAGE_OUTPUT_FORMAT || 'png';
 const OPENAI_TIMEOUT_MS = Number(process.env.OPENAI_TIMEOUT_MS || 90000);
 const CLOUDFLARE_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN;
@@ -309,7 +309,13 @@ function hasOpenAIConfig() {
 }
 
 function hasCloudflareConfig() {
-  return Boolean(CLOUDFLARE_API_TOKEN && CLOUDFLARE_ACCOUNT_ID && typeof fetch === 'function');
+  return Boolean(
+    CLOUDFLARE_API_TOKEN &&
+    CLOUDFLARE_ACCOUNT_ID &&
+    !/^your-/i.test(CLOUDFLARE_API_TOKEN) &&
+    !/^your-/i.test(CLOUDFLARE_ACCOUNT_ID) &&
+    typeof fetch === 'function'
+  );
 }
 
 function getProviderPriority({ requireImageInput = false } = {}) {
@@ -334,6 +340,10 @@ const STYLE_PROMPTS = {
 
 function normalizeDesignIdea(prompt) {
   return String(prompt || '').trim() || 'original bold graphic emblem';
+}
+
+function normalizeCustomText(text) {
+  return String(text || '').trim().slice(0, 80);
 }
 
 function normalizeSearchText(value) {
@@ -383,11 +393,14 @@ function wantsLettering(prompt) {
     .test(String(prompt || ''));
 }
 
-function buildPrintArtworkPrompt({ prompt, style, fromImage = false, referenceMode = 'inspiration', side = null, originalPrompt = '' }) {
+function buildPrintArtworkPrompt({ prompt, style, fromImage = false, referenceMode = 'inspiration', side = null, originalPrompt = '', customText = '' }) {
   const styleKey = (style || DEFAULT_STYLE).toLowerCase();
   const styleText = STYLE_PROMPTS[styleKey] || STYLE_PROMPTS[DEFAULT_STYLE];
   const idea = normalizeDesignIdea(prompt);
-  const letteringInstruction = wantsLettering(idea)
+  const exactText = normalizeCustomText(customText);
+  const letteringInstruction = exactText
+    ? `Include this exact text only if text is part of the artwork: "${exactText}". Keep it readable and do not invent extra words.`
+    : wantsLettering(idea)
     ? 'If the user requested words or lettering, render only the exact requested words, with clean readable typography.'
     : 'Do not include any letters, words, captions, random symbols, signatures, or fake text.';
   const sourceInstruction = fromImage
@@ -410,9 +423,10 @@ function buildPrintArtworkPrompt({ prompt, style, fromImage = false, referenceMo
     originalInstruction,
     `User idea to follow exactly: ${idea}`,
     `Art direction: ${styleText}.`,
-    'Composition: centered main subject, large and unmistakable, strong silhouette, balanced negative space, square canvas, no tiny or low-contrast subject.',
-    'Print quality: premium high-resolution merch illustration, sharp edges, crisp contours, clean contrast, polished professional finish, screen-print friendly, no blurry details, no pixelated edges, no muddy colors.',
-    'Background: transparent PNG if supported; otherwise plain white/light background that can be removed cleanly.',
+    'Composition: one large unmistakable main subject, strong silhouette, balanced negative space, square canvas, no tiny or low-contrast subject.',
+    'Prompt fidelity: preserve every requested subject, color, place, action, object, mood, and cultural detail. Do not replace named references with generic substitutes.',
+    'Print quality: premium merch illustration, sharp edges, crisp contours, clean contrast, polished professional finish, screen-print friendly.',
+    'Background: plain light/transparent-looking background, no scene unless requested.',
     letteringInstruction,
     'Hard negative: no t-shirt, no hoodie, no polo shirt, no clothing outline, no hanger, no human model wearing apparel, no mannequin, no ecommerce product photo, no frame, no UI, no watermark.'
   ].filter(Boolean).join(' ');
@@ -461,6 +475,7 @@ function sanitizeProviderError(message) {
 
 async function enhanceImagePrompt(prompt, style, fromImage = false, options = {}) {
   const fallbackPrompt = buildPrintArtworkPrompt({ prompt, style, fromImage, ...options });
+  const exactText = normalizeCustomText(options.customText);
 
   if (!ENABLE_AI_PROMPT_ENHANCER || !hasCloudflareConfig()) {
     return fallbackPrompt;
@@ -489,6 +504,7 @@ async function enhanceImagePrompt(prompt, style, fromImage = false, options = {}
           role: 'user',
           content: [
             `User request: ${prompt || 'original graphic artwork'}`,
+            exactText ? `Exact user text/slogan to preserve: "${exactText}"` : '',
             `Requested style: ${styleText}`,
             options.side ? `Side-specific instruction: create only the ${options.side} print artwork.` : '',
             options.originalPrompt ? `Original full request: ${options.originalPrompt}` : '',
@@ -677,6 +693,10 @@ function isGptImageModel(model = OPENAI_IMAGE_MODEL) {
   return /^gpt-image|^chatgpt-image/i.test(model);
 }
 
+function supportsTransparentBackground(model = OPENAI_IMAGE_MODEL) {
+  return !/^gpt-image-2$/i.test(model);
+}
+
 function buildOpenAIImageBody(prompt) {
   const body = {
     model: OPENAI_IMAGE_MODEL,
@@ -686,7 +706,9 @@ function buildOpenAIImageBody(prompt) {
 
   if (isGptImageModel()) {
     body.quality = OPENAI_IMAGE_QUALITY;
-    body.background = OPENAI_IMAGE_BACKGROUND;
+    body.background = OPENAI_IMAGE_BACKGROUND === 'transparent' && !supportsTransparentBackground()
+      ? 'auto'
+      : OPENAI_IMAGE_BACKGROUND;
     body.output_format = OPENAI_IMAGE_OUTPUT_FORMAT;
   } else {
     body.response_format = 'b64_json';
@@ -757,22 +779,25 @@ async function postOpenAIImageGeneration(body) {
   }
 }
 
-async function editOpenAIImage(file, idea, designId, style = DEFAULT_STYLE) {
+async function editOpenAIImage(file, idea, designId, style = DEFAULT_STYLE, customText = '') {
   const enhancedReferencePrompt = await enhanceImagePrompt(
     idea || 'Turn this reference image into an original standalone print graphic',
     style,
-    true
+    true,
+    { customText }
   );
   const prompt = buildPrintArtworkPrompt({
     prompt: enhancedReferencePrompt,
     style,
     fromImage: true,
     referenceMode: 'high-fidelity',
+    customText,
   });
   const legacyPrompt = buildPrintArtworkPrompt({
     prompt: idea || 'Turn this image into an original standalone print graphic',
     style,
     fromImage: true,
+    customText,
   });
   const buffer = fs.readFileSync(file.path);
   const formData = new FormData();
@@ -808,6 +833,7 @@ function saveDesignRecord({
   finalBackPrompt,
   finalProductPrompt,
   printSides,
+  customText,
 }) {
   const designs = readDesigns();
   designs.push({
@@ -829,6 +855,7 @@ function saveDesignRecord({
     finalBackPrompt,
     finalProductPrompt,
     printSides,
+    customText,
     aiProvider: designUrl?.startsWith('/uploads/') ? 'ai' : 'mock',
   });
   writeDesigns(designs);
@@ -852,6 +879,7 @@ function writeDesigns(data) {
 router.post('/generate', async (req, res) => {
   try {
     const { prompt, style, author } = req.body;
+    const customText = normalizeCustomText(req.body.customText);
 
     if (!prompt) {
       return res.status(400).json({ success: false, error: 'A prompt is required.' });
@@ -880,10 +908,12 @@ router.post('/generate', async (req, res) => {
             const frontResult = await generateOpenAIImage(printSides.front, style, `${designId}-front`, {
               side: 'front',
               originalPrompt: prompt,
+              customText,
             });
             const backResult = await generateOpenAIImage(printSides.back, style, `${designId}-back`, {
               side: 'back',
               originalPrompt: prompt,
+              customText,
             });
             frontDesignUrl = frontResult.designUrl;
             backDesignUrl = backResult.designUrl;
@@ -895,7 +925,8 @@ router.post('/generate', async (req, res) => {
             const result = await generateOpenAIImage(printSides?.front || prompt, style, designId, printSides?.front ? {
               side: 'front',
               originalPrompt: prompt,
-            } : {});
+              customText,
+            } : { customText });
             designUrl = result.designUrl;
             frontDesignUrl = result.designUrl;
             finalPrompt = result.finalPrompt;
@@ -924,10 +955,12 @@ router.post('/generate', async (req, res) => {
             const frontResult = await generateCloudflareImage(printSides.front, style, `${designId}-front`, {
               side: 'front',
               originalPrompt: prompt,
+              customText,
             });
             const backResult = await generateCloudflareImage(printSides.back, style, `${designId}-back`, {
               side: 'back',
               originalPrompt: prompt,
+              customText,
             });
             frontDesignUrl = frontResult.designUrl;
             backDesignUrl = backResult.designUrl;
@@ -939,7 +972,8 @@ router.post('/generate', async (req, res) => {
             const result = await generateCloudflareImage(printSides?.front || prompt, style, designId, printSides?.front ? {
               side: 'front',
               originalPrompt: prompt,
-            } : {});
+              customText,
+            } : { customText });
             designUrl = result.designUrl;
             frontDesignUrl = result.designUrl;
             finalPrompt = result.finalPrompt;
@@ -991,6 +1025,7 @@ router.post('/generate', async (req, res) => {
       finalBackPrompt,
       finalProductPrompt,
       printSides,
+      customText,
     });
 
     res.json({
@@ -1010,6 +1045,7 @@ router.post('/generate', async (req, res) => {
       finalBackPrompt,
       finalProductPrompt,
       printSides,
+      customText,
     });
   } catch (err) {
     console.error('[AI-Design] Error generating design:', err.message);
@@ -1026,6 +1062,7 @@ router.post('/generate-from-image', upload.single('image'), async (req, res) => 
     const idea = req.body.idea || '';
     const style = req.body.style || DEFAULT_STYLE;
     const author = req.body.author || 'Guest';
+    const customText = normalizeCustomText(req.body.customText);
     const file = req.file;
 
     if (!file) {
@@ -1043,7 +1080,7 @@ router.post('/generate-from-image', upload.single('image'), async (req, res) => 
 
       if (candidate === 'openai' && hasOpenAIConfig() && typeof FormData !== 'undefined' && typeof Blob !== 'undefined') {
         try {
-          const result = await editOpenAIImage(file, idea, designId, style);
+          const result = await editOpenAIImage(file, idea, designId, style, customText);
           designUrl = result.designUrl;
           finalPrompt = result.finalPrompt;
           provider = 'openai';
@@ -1059,7 +1096,8 @@ router.post('/generate-from-image', upload.single('image'), async (req, res) => 
           const result = await generateCloudflareImage(
             idea || 'Create an original standalone print graphic inspired by the uploaded reference image',
             style,
-            designId
+            designId,
+            { customText }
           );
           designUrl = result.designUrl;
           finalPrompt = `${result.finalPrompt}\n\nNote: Cloudflare fallback cannot inspect the uploaded pixels in this app; OpenAI image edit is used first when configured.`;
@@ -1092,6 +1130,7 @@ router.post('/generate-from-image', upload.single('image'), async (req, res) => 
       designUrl,
       sourceImage: `/uploads/${file.filename}`,
       finalPrompt,
+      customText,
     });
 
     res.json({
@@ -1104,6 +1143,7 @@ router.post('/generate-from-image', upload.single('image'), async (req, res) => 
       author,
       provider,
       finalPrompt,
+      customText,
     });
   } catch (err) {
     console.error('[AI-Design] Error generating from image:', err.message);

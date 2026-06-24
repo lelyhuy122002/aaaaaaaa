@@ -41,6 +41,12 @@ const state = {
   uploadedFile: null,
   printDesignUrl: null,
   preparedDesignUrls: { front: null, back: null },
+  customText: '',
+  printPlacement: { x: 0, y: -12, scale: 1 },
+  textPlacement: { x: 0, y: 18, scale: 1 },
+  compositeDesignUrls: { front: null, back: null },
+  compositeCacheKey: '',
+  interactionMode: 'position',
   designProcessVersion: 0,
   viewer3d: null,
 };
@@ -65,19 +71,130 @@ function getPreparedDesignUrl(side = state.currentView) {
   return side === 'back' ? (back || front) : front;
 }
 
-function applyCurrentDesignToViewer() {
+function getCompositeCacheKey(designs) {
+  return JSON.stringify({
+    designs,
+    customText: state.customText,
+    printPlacement: state.printPlacement,
+    textPlacement: state.textPlacement,
+  });
+}
+
+async function getCompositeDesignsForViewer(designs) {
+  const cacheKey = getCompositeCacheKey(designs);
+  if (state.compositeCacheKey === cacheKey) return state.compositeDesignUrls;
+
+  const [front, back] = await Promise.all([
+    buildCompositePrintUrl(designs.front),
+    designs.back ? buildCompositePrintUrl(designs.back) : Promise.resolve(null),
+  ]);
+  state.compositeCacheKey = cacheKey;
+  state.compositeDesignUrls = { front, back };
+  return state.compositeDesignUrls;
+}
+
+function loadImageForCanvas(url) {
+  return new Promise((resolve, reject) => {
+    if (!url) return resolve(null);
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+async function buildCompositePrintUrl(designUrl) {
+  if (!designUrl && !state.customText) return '';
+  const size = 1024;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, size, size);
+
+  const imagePlacement = state.printPlacement || { x: 0, y: -12, scale: 1 };
+  const textPlacement = state.textPlacement || { x: 0, y: 18, scale: 1 };
+
+  if (designUrl) {
+    try {
+      const img = await loadImageForCanvas(designUrl);
+      if (img) {
+        const maxW = size * 0.58 * imagePlacement.scale;
+        const maxH = size * 0.58 * imagePlacement.scale;
+        const ratio = Math.min(maxW / img.width, maxH / img.height);
+        const w = img.width * ratio;
+        const h = img.height * ratio;
+        const x = size * 0.5 - w / 2;
+        const y = size * 0.44 - h / 2;
+        ctx.drawImage(img, x, y, w, h);
+      }
+    } catch (err) {
+      console.warn('Could not composite print image:', err);
+    }
+  }
+
+  if (state.customText) {
+    const text = state.customText.toUpperCase();
+    const fontSize = Math.max(34, 82 * textPlacement.scale);
+    const x = size * (0.5 + textPlacement.x / 100);
+    const y = size * (0.5 + textPlacement.y / 100);
+    ctx.font = `900 ${fontSize}px Outfit, Arial, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = Math.max(6, fontSize * 0.12);
+    ctx.strokeStyle = 'rgba(255,255,255,0.94)';
+    ctx.fillStyle = '#111827';
+    ctx.strokeText(text, x, y);
+    ctx.fillText(text, x, y);
+  }
+
+  return canvas.toDataURL('image/png');
+}
+
+async function applyCurrentDesignToViewer() {
   const designs = {
     front: state.preparedDesignUrls.front || getFrontDesignUrl(),
     back: state.preparedDesignUrls.back || getBackDesignUrl(),
   };
   state.printDesignUrl = getPreparedDesignUrl();
+  updateOverlayPlacement();
+  const shouldBakeToViewer = state.interactionMode === 'rotate';
+
+  if (!shouldBakeToViewer) {
+    if (window.tshirt360Viewer?.setDesigns) {
+      window.tshirt360Viewer.setDesigns({ front: null, back: null });
+    } else if (window.tshirt360Viewer?.setDesign) {
+      window.tshirt360Viewer.setDesign(null);
+    }
+    updateThreeTexture();
+    return;
+  }
+
+  const viewerDesigns = await getCompositeDesignsForViewer(designs);
 
   if (window.tshirt360Viewer?.setDesigns) {
-    window.tshirt360Viewer.setDesigns(designs);
+    window.tshirt360Viewer.setDesigns(viewerDesigns);
+    window.tshirt360Viewer.setPlacement?.(state.printPlacement);
   } else if (window.tshirt360Viewer?.setDesign) {
-    window.tshirt360Viewer.setDesign(state.printDesignUrl);
+    window.tshirt360Viewer.setDesign(viewerDesigns.front || state.printDesignUrl);
+    window.tshirt360Viewer.setPlacement?.(state.printPlacement);
   }
   updateThreeTexture();
+}
+
+function setInteractionMode(mode = 'position') {
+  state.interactionMode = mode === 'rotate' ? 'rotate' : 'position';
+  const mockupContainer = document.getElementById('mockupContainer');
+  mockupContainer?.classList.toggle('interaction-position', state.interactionMode === 'position');
+  mockupContainer?.classList.toggle('interaction-rotate', state.interactionMode === 'rotate');
+  document.querySelectorAll('.placement-mode-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.interactionMode === state.interactionMode);
+  });
+  window.tshirt360Viewer?.setInteractionMode?.(state.interactionMode);
+  if (state.currentDesign || state.printDesignUrl || state.customText) {
+    applyCurrentDesignToViewer();
+  }
 }
 
 function updateDesignOverlayForSide() {
@@ -85,10 +202,14 @@ function updateDesignOverlayForSide() {
   if (!designOverlay) return;
 
   const activeUrl = getPreparedDesignUrl();
-  if (!activeUrl) return;
+  if (!activeUrl && !state.customText) return;
 
   state.printDesignUrl = activeUrl;
-  designOverlay.innerHTML = `<img src="${activeUrl}" alt="AI Generated Design" class="mockup-print-design processed-print" style="animation: fadeIn 0.5s ease;">`;
+  designOverlay.innerHTML = [
+    activeUrl ? `<img src="${escapeAttr(activeUrl)}" alt="AI Generated Design" class="mockup-print-design processed-print" style="animation: fadeIn 0.5s ease;">` : '',
+    state.customText ? `<div class="mockup-print-text">${escapeHtml(state.customText)}</div>` : '',
+  ].join('');
+  updateOverlayPlacement();
   updateThreeTexture();
 }
 
@@ -102,6 +223,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initSizeSelector();
   initQuantity();
   initGenerateButtons();
+  initPrintControls();
   initOrderFlow();
   initViewToggle();
   initThreeViewer();
@@ -374,6 +496,7 @@ function initCss3DViewer() {
   };
 
   container.addEventListener('pointerdown', (event) => {
+    if (state.interactionMode === 'position') return;
     dragging = true;
     lastX = event.clientX;
     lastY = event.clientY;
@@ -381,6 +504,7 @@ function initCss3DViewer() {
   });
 
   container.addEventListener('pointermove', (event) => {
+    if (state.interactionMode === 'position') return;
     if (!dragging) return;
     const dx = event.clientX - lastX;
     const dy = event.clientY - lastY;
@@ -653,10 +777,11 @@ function createShirtTexture(includeDesign = true) {
 }
 
 function drawThreeDesign(ctx, canvas) {
-  if (!state.printDesignUrl) return;
+  if (!state.printDesignUrl && !state.customText) return;
+  const placement = state.printPlacement || { x: 0, y: -12, scale: 1 };
 
-  if (!drawThreeDesign.cache) drawThreeDesign.cache = {};
-  if (drawThreeDesign.cache.src !== state.printDesignUrl) {
+  if (state.printDesignUrl && !drawThreeDesign.cache) drawThreeDesign.cache = {};
+  if (state.printDesignUrl && drawThreeDesign.cache.src !== state.printDesignUrl) {
     const design = new Image();
     drawThreeDesign.cache = { src: state.printDesignUrl, image: design, loaded: false };
     design.onload = () => {
@@ -667,21 +792,35 @@ function drawThreeDesign(ctx, canvas) {
     return;
   }
 
-  const cached = drawThreeDesign.cache;
-  if (!cached.loaded) return;
-
-  const img = cached.image;
-  const maxW = 300;
-  const maxH = 270;
-  const ratio = Math.min(maxW / img.width, maxH / img.height);
-  const w = img.width * ratio;
-  const h = img.height * ratio;
-  const x = canvas.width / 2 - w / 2;
-  const y = canvas.height * 0.35 - h / 2;
+  const centerX = canvas.width * (0.5 + placement.x / 100);
+  const centerY = canvas.height * (0.38 + placement.y / 100);
+  const textPlacement = state.textPlacement || { x: 0, y: 18, scale: 1 };
 
   ctx.save();
   ctx.globalAlpha = 0.96;
-  ctx.drawImage(img, x, y, w, h);
+  const cached = drawThreeDesign.cache;
+  if (state.printDesignUrl && cached?.loaded) {
+    const img = cached.image;
+    const maxW = 300 * placement.scale;
+    const maxH = 270 * placement.scale;
+    const ratio = Math.min(maxW / img.width, maxH / img.height);
+    const w = img.width * ratio;
+    const h = img.height * ratio;
+    ctx.drawImage(img, centerX - w / 2, centerY - h / 2, w, h);
+  }
+  if (state.customText) {
+    const fontSize = Math.max(26, 50 * textPlacement.scale);
+    const textX = canvas.width * (0.5 + textPlacement.x / 100);
+    const textY = canvas.height * (0.46 + textPlacement.y / 100);
+    ctx.font = `900 ${fontSize}px Outfit, Arial, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = Math.max(4, fontSize * 0.12);
+    ctx.strokeStyle = isLightColor(state.selectedColor) ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.55)';
+    ctx.fillStyle = isLightColor(state.selectedColor) ? '#111827' : '#ffffff';
+    ctx.strokeText(state.customText.toUpperCase(), textX, textY);
+    ctx.fillText(state.customText.toUpperCase(), textX, textY);
+  }
   ctx.restore();
 }
 
@@ -724,6 +863,179 @@ function initQuantity() {
       qtyInput.value = state.quantity;
     }
   });
+}
+
+/* ============================================================
+   PRINT TEXT + PLACEMENT
+   ============================================================ */
+function initPrintControls() {
+  const textInputs = [
+    document.getElementById('customTextInput'),
+    document.getElementById('customTextInputImage'),
+  ].filter(Boolean);
+  const xInput = document.getElementById('printPosX');
+  const yInput = document.getElementById('printPosY');
+  const scaleInput = document.getElementById('printScale');
+  const textXInput = document.getElementById('textPosX');
+  const textYInput = document.getElementById('textPosY');
+  const textScaleInput = document.getElementById('textScale');
+  const resetBtn = document.getElementById('placementReset');
+  const quickPlacementBtns = document.querySelectorAll('.quick-placement-btn');
+  const modeBtns = document.querySelectorAll('.placement-mode-btn');
+  const mockupContainer = document.getElementById('mockupContainer');
+  const designOverlay = document.getElementById('mockupDesign');
+
+  textInputs.forEach(input => {
+    input.addEventListener('input', () => {
+      state.customText = input.value.trim();
+      textInputs.forEach(other => {
+        if (other !== input) other.value = input.value;
+      });
+      state.compositeCacheKey = '';
+      updateDesignOverlayForSide();
+      applyCurrentDesignToViewer();
+    });
+  });
+
+  [xInput, yInput, scaleInput].forEach(input => {
+    if (!input) return;
+    input.addEventListener('input', () => {
+      state.printPlacement = {
+        x: Number(xInput?.value || 0),
+        y: Number(yInput?.value || -12),
+        scale: Number(scaleInput?.value || 100) / 100,
+      };
+      state.compositeCacheKey = '';
+      updateOverlayPlacement();
+      applyCurrentDesignToViewer();
+    });
+  });
+
+  [textXInput, textYInput, textScaleInput].forEach(input => {
+    if (!input) return;
+    input.addEventListener('input', () => {
+      state.textPlacement = {
+        x: Number(textXInput?.value || 0),
+        y: Number(textYInput?.value || 18),
+        scale: Number(textScaleInput?.value || 100) / 100,
+      };
+      state.compositeCacheKey = '';
+      updateOverlayPlacement();
+      applyCurrentDesignToViewer();
+    });
+  });
+
+  if (resetBtn) {
+    resetBtn.addEventListener('click', () => {
+      state.printPlacement = { x: 0, y: -12, scale: 1 };
+      state.textPlacement = { x: 0, y: 18, scale: 1 };
+      if (xInput) xInput.value = '0';
+      if (yInput) yInput.value = '-12';
+      if (scaleInput) scaleInput.value = '100';
+      if (textXInput) textXInput.value = '0';
+      if (textYInput) textYInput.value = '18';
+      if (textScaleInput) textScaleInput.value = '100';
+      state.compositeCacheKey = '';
+      updateOverlayPlacement();
+      applyCurrentDesignToViewer();
+    });
+  }
+
+  quickPlacementBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = btn.dataset.placementTarget;
+      const direction = btn.dataset.placementAction === 'larger' ? 1 : -1;
+      const step = target === 'text' ? 0.12 : 0.1;
+      if (target === 'text') {
+        const nextScale = Math.max(0.3, Math.min(2.6, state.textPlacement.scale + direction * step));
+        state.textPlacement = { ...state.textPlacement, scale: nextScale };
+        if (textScaleInput) textScaleInput.value = String(Math.round(nextScale * 100));
+      } else {
+        const nextScale = Math.max(0.2, Math.min(2.2, state.printPlacement.scale + direction * step));
+        state.printPlacement = { ...state.printPlacement, scale: nextScale };
+        if (scaleInput) scaleInput.value = String(Math.round(nextScale * 100));
+      }
+      state.compositeCacheKey = '';
+      updateOverlayPlacement();
+      applyCurrentDesignToViewer();
+    });
+  });
+
+  modeBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      setInteractionMode(btn.dataset.interactionMode);
+    });
+  });
+
+  if (designOverlay && mockupContainer) {
+    let dragging = false;
+    let startX = 0;
+    let startY = 0;
+    let startPlacement = { ...state.printPlacement };
+    let dragLayer = 'image';
+
+    designOverlay.addEventListener('pointerdown', (event) => {
+      if (state.interactionMode !== 'position') return;
+      const target = event.target;
+      if (!target.closest?.('.mockup-print-design, .mockup-print-text')) return;
+      dragLayer = target.closest('.mockup-print-text') ? 'text' : 'image';
+      dragging = true;
+      mockupContainer.classList.add('is-positioning-print');
+      startX = event.clientX;
+      startY = event.clientY;
+      startPlacement = dragLayer === 'text' ? { ...state.textPlacement } : { ...state.printPlacement };
+      designOverlay.setPointerCapture(event.pointerId);
+      event.stopPropagation();
+    });
+
+    designOverlay.addEventListener('pointermove', (event) => {
+      if (!dragging) return;
+      const rect = mockupContainer.getBoundingClientRect();
+      const dx = ((event.clientX - startX) / rect.width) * 100;
+      const dy = ((event.clientY - startY) / rect.height) * 100;
+      const nextX = Math.max(-80, Math.min(80, startPlacement.x + dx));
+      const nextY = Math.max(-75, Math.min(45, startPlacement.y + dy));
+      if (dragLayer === 'text') {
+        state.textPlacement = { ...state.textPlacement, x: nextX, y: nextY };
+        if (textXInput) textXInput.value = String(Math.round(nextX));
+        if (textYInput) textYInput.value = String(Math.round(nextY));
+      } else {
+        state.printPlacement = { ...state.printPlacement, x: nextX, y: nextY };
+        if (xInput) xInput.value = String(Math.round(nextX));
+        if (yInput) yInput.value = String(Math.round(nextY));
+      }
+      state.compositeCacheKey = '';
+      updateOverlayPlacement();
+      applyCurrentDesignToViewer();
+      event.stopPropagation();
+    });
+
+    const stopDrag = (event) => {
+      dragging = false;
+      mockupContainer.classList.remove('is-positioning-print');
+      event?.stopPropagation?.();
+    };
+    designOverlay.addEventListener('pointerup', stopDrag);
+    designOverlay.addEventListener('pointercancel', stopDrag);
+  }
+
+  setInteractionMode(state.interactionMode);
+  updateOverlayPlacement();
+}
+
+function updateOverlayPlacement() {
+  const designOverlay = document.getElementById('mockupDesign');
+  const mockupContainer = document.getElementById('mockupContainer');
+  if (!designOverlay) return;
+  const placement = state.printPlacement || { x: 0, y: -12, scale: 1 };
+  const textPlacement = state.textPlacement || { x: 0, y: 18, scale: 1 };
+  designOverlay.style.setProperty('--print-x', `${placement.x}%`);
+  designOverlay.style.setProperty('--print-y', `${placement.y}%`);
+  designOverlay.style.setProperty('--print-scale', String(placement.scale));
+  designOverlay.style.setProperty('--text-x', `${textPlacement.x}%`);
+  designOverlay.style.setProperty('--text-y', `${textPlacement.y}%`);
+  designOverlay.style.setProperty('--text-scale', String(textPlacement.scale));
+  mockupContainer?.classList.toggle('has-custom-text', Boolean(state.customText));
 }
 
 /* ============================================================
@@ -802,7 +1114,7 @@ async function generateFromPrompt() {
   const btn = document.getElementById('generatePromptBtn');
   setLoading(btn, true);
 
-  const requestBody = { prompt, style: state.selectedStyle };
+  const requestBody = { prompt, style: state.selectedStyle, customText: state.customText };
   if (auth.isLoggedIn()) {
     requestBody.author = auth.user.fullName || auth.user.username;
   }
@@ -854,6 +1166,7 @@ async function generateFromImage() {
     formData.append('image', state.uploadedFile);
     formData.append('idea', idea);
     formData.append('style', state.selectedStyle);
+    formData.append('customText', state.customText);
     if (auth.isLoggedIn()) {
       formData.append('author', auth.user.fullName || auth.user.username);
     }
@@ -922,6 +1235,7 @@ async function showDesignOnMockup(designUrl, productMockupUrl = null, productMoc
     mockupContainer.style.display = 'flex';
     requestAnimationFrame(() => window.tshirt360Viewer?.resize());
   }
+  setInteractionMode('position');
 
   if (productRender && mockupContainer) {
     const hasGltfViewer = Boolean(document.getElementById('tshirt360Canvas'));
@@ -1401,6 +1715,9 @@ async function submitOrder() {
     color: state.selectedColor,
     size: state.selectedSize,
     quantity: state.quantity,
+    customText: state.customText,
+    printPlacement: state.printPlacement,
+    textPlacement: state.textPlacement,
     customer: { name, phone, address, note },
     payment: 'COD',
     userId: auth.isLoggedIn() ? auth.user.id : null,

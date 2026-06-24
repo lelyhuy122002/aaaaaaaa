@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
-  <link rel="stylesheet" href="css/studio.css?v=gltf-viewer-1">
+  <link rel="stylesheet" href="css/studio.css?v=placement-fix-3">
 </head>
 <body>
 
@@ -85,6 +85,13 @@
               </div>
             </div>
 
+            <div class="form-group">
+              <label class="control-label" data-i18n="studio.text.label">Chá»¯ / slogan tÃ¹y chá»n</label>
+              <input type="text" class="form-input print-text-input" id="customTextInput"
+                data-i18n-placeholder="studio.text.placeholder"
+                placeholder="VD: BLANKUP, tÃªn riÃªng, cÃ¢u slogan...">
+            </div>
+
             <button class="generate-btn" id="generatePromptBtn">
               <span class="spinner"></span>
               <span class="btn-text" data-i18n="studio.generate">🎨 Tạo Design</span>
@@ -115,6 +122,13 @@
               <textarea class="prompt-textarea" id="ideaInput" 
                 data-i18n-placeholder="studio.idea.placeholder"
                 placeholder="Mô tả ý tưởng chỉnh sửa dựa trên ảnh này..." style="min-height:90px;"></textarea>
+            </div>
+
+            <div class="form-group">
+              <label class="control-label" data-i18n="studio.text.label">Chá»¯ / slogan tÃ¹y chá»n</label>
+              <input type="text" class="form-input print-text-input" id="customTextInputImage"
+                data-i18n-placeholder="studio.text.placeholder"
+                placeholder="VD: BLANKUP, tÃªn riÃªng, cÃ¢u slogan...">
             </div>
 
             <button class="generate-btn" id="generateImageBtn">
@@ -155,6 +169,63 @@
           </div>
 
           <div class="preview-controls">
+            <div class="print-placement-panel">
+              <div class="placement-header">
+                <span data-i18n="studio.placement.title">Vá»‹ trÃ­ in</span>
+                <button type="button" class="placement-reset" id="placementReset" data-i18n="studio.placement.reset">Reset</button>
+              </div>
+              <div class="placement-help">
+                <span data-i18n="studio.placement.dragHelp">Keo truc tiep anh hoac chu tren ao de dat vi tri.</span>
+              </div>
+              <div class="placement-mode-toggle" id="placementModeToggle">
+                <button type="button" class="placement-mode-btn active" data-interaction-mode="position" data-i18n="studio.mode.position">Chinh vi tri</button>
+                <button type="button" class="placement-mode-btn" data-interaction-mode="rotate" data-i18n="studio.mode.rotate">Xoay ao</button>
+              </div>
+              <div class="quick-placement-actions">
+                <div class="quick-placement-group">
+                  <span data-i18n="studio.placement.image">Anh</span>
+                  <button type="button" class="quick-placement-btn" data-placement-target="image" data-placement-action="smaller">-</button>
+                  <button type="button" class="quick-placement-btn" data-placement-target="image" data-placement-action="larger">+</button>
+                </div>
+                <div class="quick-placement-group">
+                  <span data-i18n="studio.placement.text">Chu</span>
+                  <button type="button" class="quick-placement-btn" data-placement-target="text" data-placement-action="smaller">-</button>
+                  <button type="button" class="quick-placement-btn" data-placement-target="text" data-placement-action="larger">+</button>
+                </div>
+              </div>
+              <div class="placement-grid">
+                <label>
+                  <span data-i18n="studio.placement.x">Ngang</span>
+                  <input type="range" id="printPosX" min="-80" max="80" value="0">
+                </label>
+                <label>
+                  <span data-i18n="studio.placement.y">Dá»c</span>
+                  <input type="range" id="printPosY" min="-75" max="45" value="-12">
+                </label>
+                <label>
+                  <span data-i18n="studio.placement.scale">KÃ­ch thÆ°á»›c</span>
+                  <input type="range" id="printScale" min="20" max="220" value="100">
+                </label>
+              </div>
+              <div class="placement-header placement-subheader">
+                <span data-i18n="studio.text.placement.title">Vá»‹ trÃ­ chá»¯</span>
+              </div>
+              <div class="placement-grid">
+                <label>
+                  <span data-i18n="studio.placement.x">Ngang</span>
+                  <input type="range" id="textPosX" min="-80" max="80" value="0">
+                </label>
+                <label>
+                  <span data-i18n="studio.placement.y">Dá»c</span>
+                  <input type="range" id="textPosY" min="-75" max="45" value="18">
+                </label>
+                <label>
+                  <span data-i18n="studio.placement.scale">KÃ­ch thÆ°á»›c</span>
+                  <input type="range" id="textScale" min="30" max="260" value="100">
+                </label>
+              </div>
+            </div>
+
             <div class="preview-options">
               <div class="preview-option product-preview-option">
                 <label>Product</label>
@@ -304,7 +375,7 @@
   <script type="importmap">
     {"imports":{"three":"/vendor/three/three.module.js","three/addons/":"/vendor/three/examples/jsm/"}}
   </script>
-  <script type="module" src="js/tshirt-360.js?v=13"></script>
-  <script src="js/studio.js?v=uniform-price-1"></script>
+  <script type="module" src="js/tshirt-360.js?v=15"></script>
+  <script src="js/studio.js?v=placement-fix-3"></script>
 </body>
 </html>

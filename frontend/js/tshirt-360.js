@@ -29,6 +29,8 @@ const viewer = {
   pendingDesigns: { front: null, back: null },
   pendingColor: '#ffffff',
   productType: 'tshirt',
+  placement: { x: 0, y: -12, scale: 1 },
+  interactionMode: 'position',
   loadVersion: 0,
   designVersion: 0,
   decalMeshes: [],
@@ -58,6 +60,20 @@ window.tshirt360Viewer = {
     viewer.productType = productType;
     loadProductModel(productType);
   },
+  setPlacement(placement = {}) {
+    viewer.placement = {
+      x: Number(placement.x || 0),
+      y: Number(placement.y ?? -12),
+      scale: Number(placement.scale || 1),
+    };
+    if (viewer.ready) applyDesigns();
+  },
+  setInteractionMode(mode = 'position') {
+    viewer.interactionMode = mode === 'rotate' ? 'rotate' : 'position';
+    if (viewer.controls) viewer.controls.enabled = viewer.interactionMode === 'rotate';
+    container?.classList.toggle('interaction-position', viewer.interactionMode === 'position');
+    container?.classList.toggle('interaction-rotate', viewer.interactionMode === 'rotate');
+  },
   resize() {
     if (viewer.resize) viewer.resize();
   },
@@ -71,6 +87,8 @@ window.tshirt360Viewer = {
       shirtMeshCount: viewer.shirtMeshes.length,
       decalCount: viewer.decalMeshes.length,
       pendingDesigns: viewer.pendingDesigns,
+      placement: viewer.placement,
+      interactionMode: viewer.interactionMode,
       bounds: viewer.bounds
         ? {
             size: viewer.bounds.size.toArray(),
@@ -99,6 +117,7 @@ function initializeViewer() {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(30, 1, 0.01, 100);
   const controls = new OrbitControls(camera, canvas);
+  controls.enabled = viewer.interactionMode === 'rotate';
   controls.enableDamping = true;
   controls.dampingFactor = 0.08;
   controls.enablePan = false;
@@ -302,9 +321,18 @@ function applySideDesign(url, side, version) {
     const z = side === 'back'
       ? box.min.z - size.z * decalConfig.zOffset
       : box.max.z + size.z * decalConfig.zOffset;
-    const position = new THREE.Vector3(center.x, center.y + size.y * decalConfig.yOffset, z);
+    const placement = viewer.placement || { x: 0, y: -12, scale: 1 };
+    const position = new THREE.Vector3(
+      center.x + size.x * (placement.x / 100),
+      center.y + size.y * (decalConfig.yOffset - placement.y / 100),
+      z
+    );
     const orientation = new THREE.Euler(0, side === 'back' ? Math.PI : 0, 0);
-    const decalSize = new THREE.Vector3(size.x * decalConfig.x, size.y * decalConfig.y, Math.max(0.08, size.z * 1.8));
+    const decalSize = new THREE.Vector3(
+      size.x * decalConfig.x * placement.scale,
+      size.y * decalConfig.y * placement.scale,
+      Math.max(0.08, size.z * 1.8)
+    );
 
     viewer.shirtMeshes.forEach((target) => {
       const geometry = new DecalGeometry(target, position, orientation, decalSize);

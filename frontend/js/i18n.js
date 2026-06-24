@@ -5,6 +5,19 @@
 
 const translations = {
   vi: {
+    'studio.text.label': 'Chu / slogan tuy chon',
+    'studio.text.placeholder': 'VD: BLANKUP, ten rieng, cau slogan...',
+    'studio.placement.title': 'Vi tri in',
+    'studio.placement.reset': 'Reset',
+    'studio.placement.x': 'Ngang',
+    'studio.placement.y': 'Doc',
+    'studio.placement.scale': 'Kich thuoc',
+    'studio.text.placement.title': 'Vi tri chu',
+    'studio.placement.dragHelp': 'Keo truc tiep anh hoac chu tren ao de dat vi tri.',
+    'studio.placement.image': 'Anh',
+    'studio.placement.text': 'Chu',
+    'studio.mode.position': 'Chinh vi tri',
+    'studio.mode.rotate': 'Xoay ao',
     // Navigation
     'nav.home': 'Trang chủ',
     'nav.howItWorks': 'Cách hoạt động',
@@ -215,6 +228,19 @@ const translations = {
   },
 
   en: {
+    'studio.text.label': 'Custom text / slogan',
+    'studio.text.placeholder': 'E.g: BLANKUP, a name, a slogan...',
+    'studio.placement.title': 'Print placement',
+    'studio.placement.reset': 'Reset',
+    'studio.placement.x': 'Horizontal',
+    'studio.placement.y': 'Vertical',
+    'studio.placement.scale': 'Size',
+    'studio.text.placement.title': 'Text placement',
+    'studio.placement.dragHelp': 'Drag the image or text directly on the shirt to position it.',
+    'studio.placement.image': 'Image',
+    'studio.placement.text': 'Text',
+    'studio.mode.position': 'Position',
+    'studio.mode.rotate': 'Rotate shirt',
     // Navigation
     'nav.home': 'Home',
     'nav.howItWorks': 'How It Works',
